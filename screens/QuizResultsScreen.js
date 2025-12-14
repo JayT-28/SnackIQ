@@ -8,16 +8,6 @@ export default function QuizResultsScreen({ navigation, route }) {
   const scoreData = calculateScore(answers);
   const personalizedTip = getPersonalizedTip(answers);
 
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        message: `I scored ${scoreData.score}/${scoreData.total} on the FoodIQ Quiz! 🎯\n\n${scoreData.level.title}\n\nCan you beat my score?`,
-      });
-    } catch (error) {
-      console.log('Error sharing:', error);
-    }
-  };
-
   const handlePlayAgain = () => {
     navigation.navigate('QuizQuestion');
   };

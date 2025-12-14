@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Linking, Modal } from 'react-native';
-import { ChevronLeft, AlertCircle, Info } from 'lucide-react-native';
+import { ChevronLeft, AlertCircle, Info, Home } from 'lucide-react-native';
 
 const openOpenFoodFacts = (barcode) => {
   Linking.openURL('https://world.openfoodfacts.org/product/'+barcode);
@@ -8,6 +8,7 @@ const openOpenFoodFacts = (barcode) => {
 
 export default function ResultsScreen({ navigation, route }) {
   const [showIngredientInfo, setShowIngredientInfo] = useState(null);
+  const [nutritionView, setNutritionView] = useState('serving'); // 'serving' or '100g'
 
   // Get product from navigation params (real API data) or use fallback
   const product = route.params?.product || {
@@ -56,7 +57,7 @@ export default function ResultsScreen({ navigation, route }) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => {
             const from = route.params?.from;
             if (from === 'History') {
@@ -72,14 +73,20 @@ export default function ResultsScreen({ navigation, route }) {
           <ChevronLeft color="#374151" size={28} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Results</Text>
-        <View style={{ width: 28 }} />
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Landing')}
+          style={styles.homeButton}
+          activeOpacity={0.7}
+        >
+          <Home color="#22c55e" size={24} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Product Info */}
         <View style={styles.productSection}>
           <View style={styles.productInfo}>
-            <Image 
+            <Image
               source={{ uri: product.image }}
               style={styles.productImage}
               resizeMode="contain"
@@ -89,23 +96,25 @@ export default function ResultsScreen({ navigation, route }) {
               <Text style={styles.productBrand}>{product.brand}</Text>
             </View>
           </View>
-        </View>
 
-        {/* Rating Badge */}
-        <View style={styles.ratingSection}>
-          <View style={[styles.ratingBadge, { backgroundColor: getRatingBgColor(product.rating) }]}>
-            <Text style={styles.ratingText}>{getRatingText(product.rating)}</Text>
+          {/* Rating Badge and Attribution */}
+          <View style={styles.ratingAndAttributionRow}>
+            <View style={[styles.ratingBadge, { backgroundColor: getRatingBgColor(product.rating) }]}>
+              <Text style={styles.ratingText}>{getRatingText(product.rating)}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.attributionButton}
+              onPress={() => openOpenFoodFacts(product.barcode)}
+              activeOpacity={0.7}
+            >
+              <Image
+                source={require('../assets/openfoodfacts-logo.png')}
+                style={styles.attributionLogo}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
           </View>
-        </View>
-
-        <View style={styles.attributionSection}>
-          <TouchableOpacity onPress={() => openOpenFoodFacts(product.barcode)} activeOpacity={0.7}>
-            <Image
-              source={require('../assets/openfoodfacts-logo.png')}
-              style={styles.attributionLogo}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
         </View>
 
         {/* Bottom Line */}
@@ -120,56 +129,117 @@ export default function ResultsScreen({ navigation, route }) {
         {/* Nutrition Facts */}
         <View style={styles.nutritionSection}>
           <Text style={styles.sectionTitle}>Quick Facts</Text>
-          
-          <View style={styles.nutritionItem}>
-            <Text style={styles.nutritionLabel}>Calories</Text>
-            <Text style={styles.nutritionValue}>{product.nutrition.calories}</Text>
+
+          {/* Toggle Switch */}
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                nutritionView === 'serving' && styles.toggleButtonActive
+              ]}
+              onPress={() => setNutritionView('serving')}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.toggleButtonText,
+                nutritionView === 'serving' && styles.toggleButtonTextActive
+              ]}>
+                Per Serving
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                nutritionView === '100g' && styles.toggleButtonActive
+              ]}
+              onPress={() => setNutritionView('100g')}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.toggleButtonText,
+                nutritionView === '100g' && styles.toggleButtonTextActive
+              ]}>
+                Per 100g
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.nutritionItem}>
-            <Text style={styles.nutritionLabel}>Added Sugar</Text>
-            <View style={styles.nutritionRight}>
-              <Text style={styles.nutritionValue}>{product.nutrition.addedSugar.value}g</Text>
-              <Text style={styles.nutritionDaily}>({product.nutrition.addedSugar.daily}% daily)</Text>
-              <Text style={styles.nutritionEmoji}>{getStatusEmoji(product.nutrition.addedSugar.status)}</Text>
-            </View>
-          </View>
+          {/* Serving Size Label */}
+          {nutritionView === 'serving' && product.nutrition.servingSize && (
+            <Text style={styles.servingSizeLabel}>Serving size: {product.nutrition.servingSize}</Text>
+          )}
 
-          <View style={styles.nutritionItem}>
-            <Text style={styles.nutritionLabel}>Protein</Text>
-            <View style={styles.nutritionRight}>
-              <Text style={styles.nutritionValue}>{product.nutrition.protein.value}g</Text>
-              <Text style={styles.nutritionDaily}>({product.nutrition.protein.daily}% daily)</Text>
-              <Text style={styles.nutritionEmoji}>{getStatusEmoji(product.nutrition.protein.status)}</Text>
+          {/* Serving Size Warning */}
+          {nutritionView === 'serving' && product.servingSizeWarning && (
+            <View style={styles.servingWarning}>
+              <AlertCircle color="#dc2626" size={16} />
+              <Text style={styles.servingWarningText}>{product.servingSizeWarning}</Text>
             </View>
-          </View>
+          )}
 
-          <View style={styles.nutritionItem}>
-            <Text style={styles.nutritionLabel}>Fiber</Text>
-            <View style={styles.nutritionRight}>
-              <Text style={styles.nutritionValue}>{product.nutrition.fiber.value}g</Text>
-              <Text style={styles.nutritionDaily}>({product.nutrition.fiber.daily}% daily)</Text>
-              <Text style={styles.nutritionEmoji}>{getStatusEmoji(product.nutrition.fiber.status)}</Text>
-            </View>
-          </View>
+          {/* Dynamically select nutrition data based on toggle */}
+          {(() => {
+            const currentNutrition = nutritionView === 'serving'
+              ? product.nutrition.perServing
+              : product.nutrition.per100g;
 
-          <View style={styles.nutritionItem}>
-            <Text style={styles.nutritionLabel}>Sodium</Text>
-            <View style={styles.nutritionRight}>
-              <Text style={styles.nutritionValue}>{product.nutrition.sodium.value}mg</Text>
-              <Text style={styles.nutritionDaily}>({product.nutrition.sodium.daily}% daily)</Text>
-              <Text style={styles.nutritionEmoji}>{getStatusEmoji(product.nutrition.sodium.status)}</Text>
-            </View>
-          </View>
+            // Fallback to main nutrition if perServing is null
+            const nutritionData = currentNutrition || product.nutrition;
 
-          <View style={styles.nutritionItem}>
-            <Text style={styles.nutritionLabel}>Saturated Fat</Text>
-            <View style={styles.nutritionRight}>
-              <Text style={styles.nutritionValue}>{product.nutrition.satFat.value}g</Text>
-              <Text style={styles.nutritionDaily}>({product.nutrition.satFat.daily}% daily)</Text>
-              <Text style={styles.nutritionEmoji}>{getStatusEmoji(product.nutrition.satFat.status)}</Text>
-            </View>
-          </View>
+            return (
+              <>
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionLabel}>Calories</Text>
+                  <Text style={styles.nutritionValue}>{nutritionData.calories}</Text>
+                </View>
+
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionLabel}>Added Sugar</Text>
+                  <View style={styles.nutritionRight}>
+                    <Text style={styles.nutritionValue}>{nutritionData.addedSugar.value}g</Text>
+                    <Text style={styles.nutritionDaily}>({nutritionData.addedSugar.daily}% daily)</Text>
+                    <Text style={styles.nutritionEmoji}>{getStatusEmoji(nutritionData.addedSugar.status)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionLabel}>Protein</Text>
+                  <View style={styles.nutritionRight}>
+                    <Text style={styles.nutritionValue}>{nutritionData.protein.value}g</Text>
+                    <Text style={styles.nutritionDaily}>({nutritionData.protein.daily}% daily)</Text>
+                    <Text style={styles.nutritionEmoji}>{getStatusEmoji(nutritionData.protein.status)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionLabel}>Fiber</Text>
+                  <View style={styles.nutritionRight}>
+                    <Text style={styles.nutritionValue}>{nutritionData.fiber.value}g</Text>
+                    <Text style={styles.nutritionDaily}>({nutritionData.fiber.daily}% daily)</Text>
+                    <Text style={styles.nutritionEmoji}>{getStatusEmoji(nutritionData.fiber.status)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionLabel}>Sodium</Text>
+                  <View style={styles.nutritionRight}>
+                    <Text style={styles.nutritionValue}>{nutritionData.sodium.value}mg</Text>
+                    <Text style={styles.nutritionDaily}>({nutritionData.sodium.daily}% daily)</Text>
+                    <Text style={styles.nutritionEmoji}>{getStatusEmoji(nutritionData.sodium.status)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionLabel}>Saturated Fat</Text>
+                  <View style={styles.nutritionRight}>
+                    <Text style={styles.nutritionValue}>{nutritionData.satFat.value}g</Text>
+                    <Text style={styles.nutritionDaily}>({nutritionData.satFat.daily}% daily)</Text>
+                    <Text style={styles.nutritionEmoji}>{getStatusEmoji(nutritionData.satFat.status)}</Text>
+                  </View>
+                </View>
+              </>
+            );
+          })()}
         </View>
 
         {/* Ingredients */}
@@ -211,7 +281,7 @@ export default function ResultsScreen({ navigation, route }) {
           >
             <Text style={styles.scanAnotherText}>📷 Scan</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={styles.halfButtonOutline}
             onPress={() => navigation.navigate('Landing', { openSearch: true })}
@@ -279,6 +349,16 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 4,
   },
+  homeButton: {
+    padding: 8,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -297,6 +377,7 @@ const styles = StyleSheet.create({
   productInfo: {
     flexDirection: 'row',
     gap: 16,
+    marginBottom: 12,
   },
   productImage: {
     width: 80,
@@ -320,33 +401,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
   },
-  ratingSection: {
-    backgroundColor: 'white',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+  ratingAndAttributionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   ratingBadge: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
   },
   ratingText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 'bold',
   },
-  attributionSection: {
-    alignItems: 'left',
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  attributionButton: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 1,
+    paddingVertical: 0,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   attributionLogo: {
-    width: 150,
-    height: 50,
+    width: 122,
+    height: 40,
   },
   bottomLineSection: {
     backgroundColor: '#fef3c7',
@@ -383,6 +468,67 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#111827',
     marginBottom: 16,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 16,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  toggleButtonActive: {
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  toggleButtonTextActive: {
+    color: '#111827',
+    fontWeight: '600',
+  },
+  nutritionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  servingSizeLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  servingWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    marginBottom: 16,
+  },
+  servingWarningText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#991b1b',
+    lineHeight: 18,
   },
   nutritionItem: {
     flexDirection: 'row',
@@ -470,6 +616,11 @@ const styles = StyleSheet.create({
   },
   scanAnotherText: {
     color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  searchAgainText: {
+    color: '#22c55e',
     fontSize: 16,
     fontWeight: '600',
   },

@@ -4,6 +4,53 @@ const BASE_URL = 'https://world.openfoodfacts.org/api/v2';
 const SEARCH_BASE = "https://world.openfoodfacts.org/cgi/search.pl";
 
 /**
+ * Parse serving size and extract numeric value in grams
+ * @param {string} servingSize - Serving size string (e.g., "1 cup (55g)", "30g", "2 cookies")
+ * @returns {number|null} Serving size in grams or null if can't parse
+ */
+function parseServingGrams(servingSize) {
+  if (!servingSize) return null;
+
+  // Try to extract number followed by 'g' (case insensitive)
+  const match = servingSize.match(/(\d+(?:\.\d+)?)\s*g/i);
+  return match ? parseFloat(match[1]) : null;
+}
+
+/**
+ * Validate if serving size is reasonable for rating calculations
+ * @param {number} servingGrams - Serving size in grams
+ * @param {string} productName - Product name for context
+ * @returns {Object} { isValid: boolean, warning: string|null }
+ */
+function validateServingSize(servingGrams, productName = '') {
+  if (!servingGrams) {
+    return { isValid: false, warning: 'No serving size specified' };
+  }
+
+  const lower = productName.toLowerCase();
+
+  // Condiments and sauces: 5-30g is reasonable
+  const isCondiment = ['sauce', 'ketchup', 'mustard', 'mayo', 'dressing', 'salsa'].some(w => lower.includes(w));
+  if (isCondiment) {
+    if (servingGrams < 5) {
+      return { isValid: false, warning: `Serving size unusually small (${servingGrams}g)` };
+    }
+    return { isValid: true, warning: null };
+  }
+
+  // Snacks and main foods: 20-200g is reasonable
+  if (servingGrams < 20) {
+    return { isValid: false, warning: `Serving size suspiciously small (${servingGrams}g) - manufacturer may be minimizing nutrition facts` };
+  }
+
+  if (servingGrams > 500) {
+    return { isValid: false, warning: `Serving size very large (${servingGrams}g)` };
+  }
+
+  return { isValid: true, warning: null };
+}
+
+/**
  * Fetch product by barcode
  * @param {string} barcode - Product barcode (EAN-13, UPC, etc.)
  * @returns {Promise<Object>} Product data or null if not found
@@ -28,88 +75,149 @@ export async function getProductByBarcode(barcode) {
 /**
  * Calculate rating based on nutrition
  * @param {Object} nutriments - Nutrition data from API
+ * @param {boolean} usePerServing - Whether to use per-serving values (true) or per-100g (false)
  * @returns {string} 'green', 'yellow', or 'red'
  */
-export function calculateRating(nutriments, nutrition) {
+export function calculateRating(nutriments, usePerServing = true) {
   if (!nutriments) return 'yellow';
-  
+
   let redFlags = 0;
   let yellowFlags = 0;
   let greenFlags = 0;
-  
+
+  // Choose data source based on usePerServing flag
+  let sugars, sodium, satFat, calories, protein, fiber;
+
+  if (usePerServing && nutriments['sugars_serving']) {
+    // Use per-serving values
+    sugars = nutriments['sugars_serving'] || 0;
+    sodium = nutriments['sodium_serving'] ? nutriments['sodium_serving'] * 1000 : 0;
+    satFat = nutriments['saturated-fat_serving'] || 0;
+    calories = nutriments['energy-kcal_serving'] || 0;
+    protein = nutriments['proteins_serving'] || 0;
+    fiber = nutriments['fiber_serving'] || 0;
+  } else {
+    // Fallback to per-100g values
+    sugars = nutriments['sugars_100g'] || nutriments['sugars'] || 0;
+    sodium = nutriments['sodium_100g'] ? nutriments['sodium_100g'] * 1000 : nutriments['sodium'] || 0;
+    satFat = nutriments['saturated-fat_100g'] || nutriments['saturated-fat'] || 0;
+    calories = nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0;
+    protein = nutriments['proteins_100g'] || nutriments['proteins'] || 0;
+    fiber = nutriments['fiber_100g'] || nutriments['fiber'] || 0;
+  }
+
   // Red flags (bad things)
-  // High added sugar (>10g per 100g or >12g per serving)
-  const sugars = nutriments['sugars_100g'] || nutriments['sugars'] || 0;
-  if (sugars > 10) redFlags++;
-  if (sugars > 5 && sugars <= 10) yellowFlags++;
-  
-  // High sodium (>400mg per 100g or >500mg per serving)
-  const sodium = nutriments['sodium_100g'] ? nutriments['sodium_100g'] * 1000 : nutriments['sodium'] || 0;
-  if (sodium > 400) redFlags++;
-  if (sodium > 200 && sodium <= 400) yellowFlags++;
-  
-  // High saturated fat (>5g per 100g or >6g per serving)
-  const satFat = nutriments['saturated-fat_100g'] || nutriments['saturated-fat'] || 0;
-  if (satFat > 5) redFlags++;
-  if (satFat > 2 && satFat <=5) yellowFlags++;
-  
-  // Very high calories per 100g (>400)
-  const calories = nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0;
-  const protein = nutriments['proteins_100g'] || nutriments['proteins'] || 0;
-  if (calories > 400) redFlags++;
-  if (calories > 100 && protein < 2) redFlags++;
-  
+  // Thresholds are calibrated for per-serving values
+  // For per-100g, these thresholds still make sense as they scale proportionally
+
+  // High added sugar (>12g per serving or >10g per 100g)
+  const sugarThreshold = usePerServing ? 12 : 10;
+  const sugarMediumThreshold = usePerServing ? 6 : 5;
+  if (sugars > sugarThreshold) redFlags++;
+  if (sugars > sugarMediumThreshold && sugars <= sugarThreshold) yellowFlags++;
+
+  // High sodium (>500mg per serving or >400mg per 100g)
+  const sodiumThreshold = usePerServing ? 500 : 400;
+  const sodiumMediumThreshold = usePerServing ? 250 : 200;
+  if (sodium > sodiumThreshold) redFlags++;
+  if (sodium > sodiumMediumThreshold && sodium <= sodiumThreshold) yellowFlags++;
+
+  // High saturated fat (>6g per serving or >5g per 100g)
+  const satFatThreshold = usePerServing ? 6 : 5;
+  const satFatMediumThreshold = usePerServing ? 3 : 2;
+  if (satFat > satFatThreshold) redFlags++;
+  if (satFat > satFatMediumThreshold && satFat <= satFatThreshold) yellowFlags++;
+
+  // Very high calories (>250 per serving or >400 per 100g)
+  const calorieThreshold = usePerServing ? 250 : 400;
+  const lowProteinCalorieThreshold = usePerServing ? 150 : 100;
+  const lowProteinThreshold = usePerServing ? 3 : 2;
+  if (calories > calorieThreshold) redFlags++;
+  if (calories > lowProteinCalorieThreshold && protein < lowProteinThreshold) redFlags++;
+
   // Green flags (good things)
-  // Good fiber (>3g per 100g)
-  const fiber = nutriments['fiber_100g'] || nutriments['fiber'] || 0;
-  if (fiber > 3) greenFlags++;
-  
-  // Good protein (>5g per 100g)
-  if (protein > 5) greenFlags++;
-  
+  // Good fiber (>4g per serving or >3g per 100g)
+  const fiberThreshold = usePerServing ? 4 : 3;
+  if (fiber > fiberThreshold) greenFlags++;
+
+  // Good protein (>7g per serving or >5g per 100g)
+  const proteinThreshold = usePerServing ? 7 : 5;
+  if (protein > proteinThreshold) greenFlags++;
+
   // Rating logic
   if (redFlags >= 2) return 'red';
   if (yellowFlags >= 2) return 'yellow';
   if (redFlags === 1 && greenFlags === 0) return 'yellow';
   if (greenFlags >= 2 && redFlags === 0) return 'green';
   if (greenFlags >= 1 && yellowFlags <= 1) return 'green';
-  
+
   return 'yellow'; // Default to moderate
 }
 
 /**
  * Get nutrient status (green/yellow/red) for individual nutrients
+ * @param {string} nutrientType - Type of nutrient (sugar, sodium, satfat, protein, fiber)
+ * @param {number} value - Nutrient value
+ * @param {boolean} isPerServing - Whether value is per-serving (true) or per-100g (false)
+ * @returns {string} 'green', 'yellow', or 'red'
  */
-function getNutrientStatus(nutrientType, value, per100g = true) {
-  // Adjust thresholds based on per 100g or per serving
-  const multiplier = per100g ? 1 : 1;
-  
+function getNutrientStatus(nutrientType, value, isPerServing = true) {
   switch(nutrientType) {
     case 'sugar':
-      if (value > 15 * multiplier) return 'red';
-      if (value > 5 * multiplier) return 'yellow';
-      return 'green';
-    
+      if (isPerServing) {
+        if (value > 15) return 'red';      // >15g per serving
+        if (value > 6) return 'yellow';    // 6-15g per serving
+        return 'green';                     // <6g per serving
+      } else {
+        if (value > 15) return 'red';      // >15g per 100g
+        if (value > 5) return 'yellow';    // 5-15g per 100g
+        return 'green';                     // <5g per 100g
+      }
+
     case 'sodium':
-      if (value > 500 * multiplier) return 'red';
-      if (value > 200 * multiplier) return 'yellow';
-      return 'green';
-    
+      if (isPerServing) {
+        if (value > 500) return 'red';     // >500mg per serving
+        if (value > 250) return 'yellow';  // 250-500mg per serving
+        return 'green';                     // <250mg per serving
+      } else {
+        if (value > 500) return 'red';     // >500mg per 100g
+        if (value > 200) return 'yellow';  // 200-500mg per 100g
+        return 'green';                     // <200mg per 100g
+      }
+
     case 'satfat':
-      if (value > 5 * multiplier) return 'red';
-      if (value > 2 * multiplier) return 'yellow';
-      return 'green';
-    
+      if (isPerServing) {
+        if (value > 6) return 'red';       // >6g per serving
+        if (value > 3) return 'yellow';    // 3-6g per serving
+        return 'green';                     // <3g per serving
+      } else {
+        if (value > 5) return 'red';       // >5g per 100g
+        if (value > 2) return 'yellow';    // 2-5g per 100g
+        return 'green';                     // <2g per 100g
+      }
+
     case 'protein':
-      if (value > 10 * multiplier) return 'green';
-      if (value > 5 * multiplier) return 'yellow';
-      return 'red';
-    
+      if (isPerServing) {
+        if (value > 10) return 'green';    // >10g per serving
+        if (value > 5) return 'yellow';    // 5-10g per serving
+        return 'red';                       // <5g per serving
+      } else {
+        if (value > 10) return 'green';    // >10g per 100g
+        if (value > 5) return 'yellow';    // 5-10g per 100g
+        return 'red';                       // <5g per 100g
+      }
+
     case 'fiber':
-      if (value > 5 * multiplier) return 'green';
-      if (value > 2 * multiplier) return 'yellow';
-      return 'red';
-    
+      if (isPerServing) {
+        if (value > 5) return 'green';     // >5g per serving
+        if (value > 2) return 'yellow';    // 2-5g per serving
+        return 'red';                       // <2g per serving
+      } else {
+        if (value > 5) return 'green';     // >5g per 100g
+        if (value > 2) return 'yellow';    // 2-5g per 100g
+        return 'red';                       // <2g per 100g
+      }
+
     default:
       return 'yellow';
   }
@@ -163,35 +271,52 @@ function parseIngredients(ingredientsText) {
 
 /**
  * Generate "bottom line" summary
+ * @param {Object} product - Product data from API
+ * @param {string} rating - Rating (green/yellow/red)
+ * @param {Object} nutriments - Nutrition data from API
+ * @param {boolean} usePerServing - Whether values are per-serving (true) or per-100g (false)
+ * @param {string} servingSize - Serving size string for display
+ * @returns {string} Summary text
  */
-function generateBottomLine(product, rating, nutriments) {
+function generateBottomLine(product, rating, nutriments, usePerServing = true, servingSize = '100g') {
   const name = product.product_name || 'This product';
-  const sugars = nutriments['sugars_100g'] || nutriments['sugars'] || 0;
-  const fiber = nutriments['fiber_100g'] || nutriments['fiber'] || 0;
-  const protein = nutriments['proteins_100g'] || nutriments['proteins'] || 0;
-  const sodium = nutriments['sodium_100g'] ? nutriments['sodium_100g'] * 1000 : nutriments['sodium'] || 0;
-  
+  const unit = usePerServing ? 'per serving' : 'per 100g';
+
+  let sugars, fiber, protein, sodium;
+
+  if (usePerServing && nutriments['sugars_serving']) {
+    sugars = nutriments['sugars_serving'] || 0;
+    fiber = nutriments['fiber_serving'] || 0;
+    protein = nutriments['proteins_serving'] || 0;
+    sodium = nutriments['sodium_serving'] ? nutriments['sodium_serving'] * 1000 : 0;
+  } else {
+    sugars = nutriments['sugars_100g'] || nutriments['sugars'] || 0;
+    fiber = nutriments['fiber_100g'] || nutriments['fiber'] || 0;
+    protein = nutriments['proteins_100g'] || nutriments['proteins'] || 0;
+    sodium = nutriments['sodium_100g'] ? nutriments['sodium_100g'] * 1000 : nutriments['sodium'] || 0;
+  }
+
   let summary = '';
-  
+
   if (rating === 'red') {
     summary = `${name} is high in concerning nutrients. `;
-    if (sugars > 15) summary += `Contains ${Math.round(sugars)}g of sugar per 100g. `;
-    if (sodium > 500) summary += `High sodium content (${Math.round(sodium)}mg per 100g). `;
+    if (sugars > 15) summary += `Contains ${Math.round(sugars)}g of sugar ${unit}. `;
+    if (sodium > 500) summary += `High sodium content (${Math.round(sodium)}mg ${unit}). `;
     if (fiber < 2) summary += `Low in fiber. `;
     summary += 'Consider healthier alternatives.';
   } else if (rating === 'yellow') {
     summary = `${name} is a moderate choice. `;
-    if (sugars > 10) summary += `Contains ${Math.round(sugars)}g of sugar per 100g, which is moderately high. `;
+    if (sugars > 10) summary += `Contains ${Math.round(sugars)}g of sugar ${unit}, which is moderately high. `;
     if (fiber < 3 && protein < 5) summary += `Could be more nutritious - low in fiber and protein. `;
     summary += 'Okay occasionally, but look for better options for regular consumption.';
   } else {
     summary = `${name} is a good nutritional choice. `;
-    if (protein > 10) summary += `Good source of protein (${Math.round(protein)}g per 100g). `;
-    if (fiber > 5) summary += `High in fiber (${Math.round(fiber)}g per 100g). `;
+    if (protein > 10) summary += `Good source of protein (${Math.round(protein)}g ${unit}). `;
+    if (fiber > 5) summary += `High in fiber (${Math.round(fiber)}g ${unit}). `;
     if (sugars < 5) summary += `Low in sugar. `;
     summary += 'A smart pick for regular consumption.';
   }
-  
+
   return summary;
 }
 
@@ -202,64 +327,124 @@ function generateBottomLine(product, rating, nutriments) {
  */
 export function parseProductData(apiProduct) {
   if (!apiProduct) return null;
-  
+
   const nutriments = apiProduct.nutriments || {};
-  const rating = calculateRating(nutriments);
-  
+  const productName = apiProduct.product_name || 'Unknown Product';
+
   // Get serving size info
-  const servingSize = apiProduct.serving_size || '100g';
-  const per100g = true; // We'll standardize to per 100g for consistency
-  
-  // Extract nutrition values (prefer per 100g for consistency)
-  const sugars = nutriments['sugars_100g'] || nutriments['sugars'] || 0;
-  const protein = nutriments['proteins_100g'] || nutriments['proteins'] || 0;
-  const fiber = nutriments['fiber_100g'] || nutriments['fiber'] || 0;
-  const sodium = nutriments['sodium_100g'] ? nutriments['sodium_100g'] * 1000 : nutriments['sodium'] || 0;
-  const satFat = nutriments['saturated-fat_100g'] || nutriments['saturated-fat'] || 0;
-  const calories = Math.round(nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0);
-  
-  // Calculate % daily values (based on 2000 calorie diet)
-  const sugarDaily = Math.round((sugars / 50) * 100); // 50g daily limit
-  const proteinDaily = Math.round((protein / 50) * 100); // 50g daily target
-  const fiberDaily = Math.round((fiber / 28) * 100); // 28g daily target
-  const sodiumDaily = Math.round((sodium / 2300) * 100); // 2300mg daily limit
-  const satFatDaily = Math.round((satFat / 20) * 100); // 20g daily limit
-  
+  const servingSize = apiProduct.serving_size || apiProduct.serving_quantity || '100g';
+  const servingGrams = parseServingGrams(servingSize);
+  const servingValidation = validateServingSize(servingGrams, productName);
+
+  // Determine if we should use per-serving for rating
+  const usePerServing = servingValidation.isValid && nutriments['sugars_serving'];
+
+  // Calculate rating using appropriate values
+  const rating = calculateRating(nutriments, usePerServing);
+
+  // --- PER-SERVING DATA ---
+  const servingSugars = nutriments['sugars_serving'] || 0;
+  const servingProtein = nutriments['proteins_serving'] || 0;
+  const servingFiber = nutriments['fiber_serving'] || 0;
+  const servingSodium = nutriments['sodium_serving'] ? nutriments['sodium_serving'] * 1000 : 0;
+  const servingSatFat = nutriments['saturated-fat_serving'] || 0;
+  const servingCalories = Math.round(nutriments['energy-kcal_serving'] || 0);
+
+  // --- PER-100G DATA ---
+  const sugars100g = nutriments['sugars_100g'] || nutriments['sugars'] || 0;
+  const protein100g = nutriments['proteins_100g'] || nutriments['proteins'] || 0;
+  const fiber100g = nutriments['fiber_100g'] || nutriments['fiber'] || 0;
+  const sodium100g = nutriments['sodium_100g'] ? nutriments['sodium_100g'] * 1000 : nutriments['sodium'] || 0;
+  const satFat100g = nutriments['saturated-fat_100g'] || nutriments['saturated-fat'] || 0;
+  const calories100g = Math.round(nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0);
+
+  // Helper function to calculate daily values
+  const calcDaily = (value, dailyTarget) => Math.round((value / dailyTarget) * 100);
+
+  // --- BUILD PER-SERVING NUTRITION OBJECT ---
+  // Check if we have ANY per-serving data (not just sugars)
+  const hasServingData = nutriments['energy-kcal_serving'] ||
+                         nutriments['sugars_serving'] ||
+                         nutriments['proteins_serving'] ||
+                         nutriments['fiber_serving'] ||
+                         nutriments['sodium_serving'] ||
+                         nutriments['saturated-fat_serving'];
+
+  const perServingNutrition = hasServingData ? {
+    calories: servingCalories,
+    addedSugar: {
+      value: Math.round(servingSugars),
+      status: getNutrientStatus('sugar', servingSugars, true),
+      daily: calcDaily(servingSugars, 50)
+    },
+    protein: {
+      value: Math.round(servingProtein),
+      status: getNutrientStatus('protein', servingProtein, true),
+      daily: calcDaily(servingProtein, 50)
+    },
+    fiber: {
+      value: Math.round(servingFiber),
+      status: getNutrientStatus('fiber', servingFiber, true),
+      daily: calcDaily(servingFiber, 28)
+    },
+    sodium: {
+      value: Math.round(servingSodium),
+      status: getNutrientStatus('sodium', servingSodium, true),
+      daily: calcDaily(servingSodium, 2300)
+    },
+    satFat: {
+      value: Math.round(servingSatFat),
+      status: getNutrientStatus('satfat', servingSatFat, true),
+      daily: calcDaily(servingSatFat, 20)
+    }
+  } : null;
+
+  // --- BUILD PER-100G NUTRITION OBJECT ---
+  const per100gNutrition = {
+    calories: calories100g,
+    addedSugar: {
+      value: Math.round(sugars100g),
+      status: getNutrientStatus('sugar', sugars100g, false),
+      daily: calcDaily(sugars100g, 50)
+    },
+    protein: {
+      value: Math.round(protein100g),
+      status: getNutrientStatus('protein', protein100g, false),
+      daily: calcDaily(protein100g, 50)
+    },
+    fiber: {
+      value: Math.round(fiber100g),
+      status: getNutrientStatus('fiber', fiber100g, false),
+      daily: calcDaily(fiber100g, 28)
+    },
+    sodium: {
+      value: Math.round(sodium100g),
+      status: getNutrientStatus('sodium', sodium100g, false),
+      daily: calcDaily(sodium100g, 2300)
+    },
+    satFat: {
+      value: Math.round(satFat100g),
+      status: getNutrientStatus('satfat', satFat100g, false),
+      daily: calcDaily(satFat100g, 20)
+    }
+  };
+
   return {
-    name: apiProduct.product_name || 'Unknown Product',
-    barcode: apiProduct.code, 
+    name: productName,
+    barcode: apiProduct.code,
     brand: apiProduct.brands || 'Unknown Brand',
     image: apiProduct.image_url || apiProduct.image_front_url || 'https://via.placeholder.com/150',
     rating: rating,
-    bottomLine: generateBottomLine(apiProduct, rating, nutriments),
+    bottomLine: generateBottomLine(apiProduct, rating, nutriments, usePerServing, servingSize),
+    servingSize: servingSize,
+    servingSizeWarning: servingValidation.warning,
     nutrition: {
-      calories: calories,
+      // Primary nutrition is per-serving if valid, otherwise per-100g
+      ...(usePerServing ? perServingNutrition : per100gNutrition),
       servingSize: servingSize,
-      addedSugar: {
-        value: Math.round(sugars),
-        status: getNutrientStatus('sugar', sugars),
-        daily: sugarDaily
-      },
-      protein: {
-        value: Math.round(protein),
-        status: getNutrientStatus('protein', protein),
-        daily: proteinDaily
-      },
-      fiber: {
-        value: Math.round(fiber),
-        status: getNutrientStatus('fiber', fiber),
-        daily: fiberDaily
-      },
-      sodium: {
-        value: Math.round(sodium),
-        status: getNutrientStatus('sodium', sodium),
-        daily: sodiumDaily
-      },
-      satFat: {
-        value: Math.round(satFat),
-        status: getNutrientStatus('satfat', satFat),
-        daily: satFatDaily
-      }
+      // Include both for comparison
+      perServing: perServingNutrition,
+      per100g: per100gNutrition
     },
     ingredients: parseIngredients(apiProduct.ingredients_text)
   };
