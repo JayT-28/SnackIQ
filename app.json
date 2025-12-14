@@ -18,7 +18,7 @@
       "backgroundColor": "#f7ffee"
     },
     "ios": {
-      "bundleIdentifier": "com.food4life.snackiq",
+      "bundleIdentifier": "com.thefood4life.snackiq",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -38,7 +38,13 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "output": "single",
-      "bundler": "metro"
+      "bundler": "metro",
+      "viewport": {
+        "width": "device-width",
+        "initialScale": 1,
+        "maximumScale": 1,
+        "userScalable": false
+      }
     },
     "plugins": [
       "expo-camera"
