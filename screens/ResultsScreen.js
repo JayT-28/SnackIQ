@@ -107,6 +107,7 @@ export default function ResultsScreen({ navigation, route }) {
               <Text style={styles.productBrand}>{product.brand}</Text>
             </View>
           </View>
+        </View>
 
         {/* Bottom Line */}
         <View style={styles.bottomLineSection}>
