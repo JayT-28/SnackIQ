@@ -73,6 +73,29 @@ export async function getProductByBarcode(barcode) {
 }
 
 /**
+ * Map Nutriscore grade (A-E) to our 3-tier rating system
+ * @param {string} nutriscoreGrade - Nutriscore grade from API (a-e or unknown)
+ * @returns {string|null} 'green', 'yellow', 'red', or null if unavailable
+ * @private - Internal use only, not exposed to UI
+ */
+function mapNutriscoreToRating(nutriscoreGrade) {
+  if (!nutriscoreGrade || nutriscoreGrade === 'unknown') {
+    return null; // Signal to use custom calculation
+  }
+
+  const grade = nutriscoreGrade.toLowerCase();
+
+  // A or B → Good (green)
+  if (grade === 'a' || grade === 'b') return 'green';
+
+  // D or E → Nope (red)
+  if (grade === 'd' || grade === 'e') return 'red';
+
+  // C → Okay (yellow)
+  return 'yellow';
+}
+
+/**
  * Calculate rating based on nutrition
  * @param {Object} nutriments - Nutrition data from API
  * @param {boolean} usePerServing - Whether to use per-serving values (true) or per-100g (false)
@@ -336,11 +359,17 @@ export function parseProductData(apiProduct) {
   const servingGrams = parseServingGrams(servingSize);
   const servingValidation = validateServingSize(servingGrams, productName);
 
-  // Determine if we should use per-serving for rating
-  const usePerServing = servingValidation.isValid && nutriments['sugars_serving'];
+  // Extract Nutriscore silently (internal use only, not exposed to UI)
+  const nutriscoreGrade = apiProduct.nutriscore_grade;
+  const nutriscoreMappedRating = mapNutriscoreToRating(nutriscoreGrade);
 
-  // Calculate rating using appropriate values
-  const rating = calculateRating(nutriments, usePerServing);
+  // Calculate custom ratings as fallback
+  const customPerServingRating = calculateRating(nutriments, true);
+  const customPer100gRating = calculateRating(nutriments, false);
+
+  // Use Nutriscore for per-serving if available, otherwise fallback to custom
+  const perServingRating = nutriscoreMappedRating || customPerServingRating;
+  const per100gRating = customPer100gRating;
 
   // --- PER-SERVING DATA ---
   const servingSugars = nutriments['sugars_serving'] || 0;
@@ -429,18 +458,31 @@ export function parseProductData(apiProduct) {
     }
   };
 
+  // Generate bottom lines for each view (NO mention of Nutriscore in UI)
+  const bottomLinePerServing = generateBottomLine(apiProduct, perServingRating, nutriments, true, servingSize);
+  const bottomLinePer100g = generateBottomLine(apiProduct, per100gRating, nutriments, false, '100g');
+
   return {
     name: productName,
     barcode: apiProduct.code,
     brand: apiProduct.brands || 'Unknown Brand',
     image: apiProduct.image_url || apiProduct.image_front_url || 'https://via.placeholder.com/150',
-    rating: rating,
-    bottomLine: generateBottomLine(apiProduct, rating, nutriments, usePerServing, servingSize),
+
+    // Rating for per-serving view (Nutriscore-based if available, otherwise custom)
+    rating: perServingRating,
+
+    // Rating for per-100g view (always custom)
+    ratingPer100g: per100gRating,
+
+    // Bottom lines for each view
+    bottomLine: bottomLinePerServing,
+    bottomLinePer100g: bottomLinePer100g,
+
     servingSize: servingSize,
     servingSizeWarning: servingValidation.warning,
     nutrition: {
-      // Primary nutrition is per-serving if valid, otherwise per-100g
-      ...(usePerServing ? perServingNutrition : per100gNutrition),
+      // Primary nutrition defaults to per-serving if available, otherwise per-100g
+      ...(perServingNutrition || per100gNutrition),
       servingSize: servingSize,
       // Include both for comparison
       perServing: perServingNutrition,

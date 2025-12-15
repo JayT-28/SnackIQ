@@ -8,7 +8,7 @@ const openOpenFoodFacts = (barcode) => {
 
 export default function ResultsScreen({ navigation, route }) {
   const [showIngredientInfo, setShowIngredientInfo] = useState(null);
-  const [nutritionView, setNutritionView] = useState('serving'); // 'serving' or '100g'
+  const [nutritionView, setNutritionView] = useState('100g'); // 'serving' or '100g'
 
   // Get product from navigation params (real API data) or use fallback
   const product = route.params?.product || {
@@ -17,7 +17,9 @@ export default function ResultsScreen({ navigation, route }) {
     brand: "Sample Brand",
     image: "https://via.placeholder.com/150",
     rating: "yellow",
+    ratingPer100g: "yellow",
     bottomLine: "No product data available. Please scan a product.",
+    bottomLinePer100g: "No product data available. Please scan a product.",
     nutrition: {
       calories: 0,
       addedSugar: { value: 0, status: "green", daily: 0 },
@@ -28,6 +30,15 @@ export default function ResultsScreen({ navigation, route }) {
     },
     ingredients: []
   };
+
+  // Dynamically select rating and bottom line based on toggle
+  const currentRating = nutritionView === 'serving'
+    ? product.rating
+    : (product.ratingPer100g || product.rating);
+
+  const currentBottomLine = nutritionView === 'serving'
+    ? product.bottomLine
+    : (product.bottomLinePer100g || product.bottomLine);
 
   const getRatingColor = (rating) => {
     if (rating === "green") return "#22c55e";
@@ -96,13 +107,22 @@ export default function ResultsScreen({ navigation, route }) {
               <Text style={styles.productBrand}>{product.brand}</Text>
             </View>
           </View>
+        </View>
 
-          {/* Rating Badge and Attribution */}
-          <View style={styles.ratingAndAttributionRow}>
-            <View style={[styles.ratingBadge, { backgroundColor: getRatingBgColor(product.rating) }]}>
-              <Text style={styles.ratingText}>{getRatingText(product.rating)}</Text>
+        {/* Bottom Line */}
+        <View style={styles.bottomLineSection}>
+          {/* Header Row with Icons */}
+          <View style={styles.bottomLineHeader}>
+            <View style={styles.bottomLineHeaderLeft}>
+              <AlertCircle color="#a16207" size={20} />
+              <Text style={styles.bottomLineTitle}>The Bottom Line</Text>
+              {/* Rating Badge */}
+              <View style={[styles.ratingBadge, { backgroundColor: getRatingBgColor(currentRating) }]}>
+                <Text style={styles.ratingText}>{getRatingText(currentRating)}</Text>
+              </View>
             </View>
 
+            {/* Attribution */}
             <TouchableOpacity
               style={styles.attributionButton}
               onPress={() => openOpenFoodFacts(product.barcode)}
@@ -115,15 +135,9 @@ export default function ResultsScreen({ navigation, route }) {
               />
             </TouchableOpacity>
           </View>
-        </View>
 
-        {/* Bottom Line */}
-        <View style={styles.bottomLineSection}>
-          <View style={styles.bottomLineHeader}>
-            <AlertCircle color="#a16207" size={20} />
-            <Text style={styles.bottomLineTitle}>The Bottom Line</Text>
-          </View>
-          <Text style={styles.bottomLineText}>{product.bottomLine}</Text>
+          {/* Full Width Text */}
+          <Text style={styles.bottomLineText}>{currentBottomLine}</Text>
         </View>
 
         {/* Nutrition Facts */}
@@ -401,20 +415,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
   },
-  ratingAndAttributionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   ratingBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginLeft: 8,
   },
   ratingText: {
     color: 'white',
     fontSize: 13,
     fontWeight: 'bold',
+  },
+  bottomLineSection: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#fde68a',
+  },
+  bottomLineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  bottomLineHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  bottomLineTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#78350f',
+  },
+  bottomLineText: {
+    fontSize: 16,
+    color: '#78350f',
+    lineHeight: 24,
   },
   attributionButton: {
     backgroundColor: '#ffffff',
@@ -432,29 +471,6 @@ const styles = StyleSheet.create({
   attributionLogo: {
     width: 122,
     height: 40,
-  },
-  bottomLineSection: {
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#fde68a',
-  },
-  bottomLineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  bottomLineTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#78350f',
-  },
-  bottomLineText: {
-    fontSize: 16,
-    color: '#78350f',
-    lineHeight: 24,
   },
   nutritionSection: {
     backgroundColor: 'white',
