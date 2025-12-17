@@ -42,7 +42,7 @@ export default function BarcodeScannerView({
     if (!permission.granted) {
       const result = await requestPermission();
       if (!result.granted) {
-        alert('Please enable camera access in your device settings to scan barcodes.');
+        alert('SnackIQ uses your camera to scan product barcodes and look up nutritional information. No photos are taken or stored. Please enable camera access in your device settings to scan barcodes.');
         return;
       }
     }

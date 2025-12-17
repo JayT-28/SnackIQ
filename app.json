@@ -21,7 +21,8 @@
       "bundleIdentifier": "com.thefood4life.snackiq",
       "supportsTablet": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "SnackIQ uses your camera to scan product barcodes and look up nutritional information. No photos are taken or stored."
       }
     },
     "android": {
@@ -31,8 +32,7 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA"
       ]
     },
     "web": {
@@ -47,7 +47,12 @@
       }
     },
     "plugins": [
-      "expo-camera"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SnackIQ uses your camera to scan product barcodes and look up nutritional information. No photos are taken or stored."
+        }
+      ]
     ],
     "extra": {
       "eas": {
