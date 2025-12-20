@@ -121,7 +121,16 @@ export default function ResultsScreen({ navigation, route }) {
                 <Text style={styles.ratingText}>{getRatingText(currentRating)}</Text>
               </View>
             </View>
+          </View>
 
+          {/* Full Width Text */}
+          <Text style={styles.bottomLineText}>{currentBottomLine}</Text>
+        </View>
+
+        {/* Nutrition Facts */}
+        <View style={styles.nutritionSection}>
+          <View style={styles.quickFactsHeader}>
+            <Text style={styles.sectionTitle}>Quick Facts</Text>
             {/* Attribution */}
             <TouchableOpacity
               style={styles.attributionButton}
@@ -135,14 +144,6 @@ export default function ResultsScreen({ navigation, route }) {
               />
             </TouchableOpacity>
           </View>
-
-          {/* Full Width Text */}
-          <Text style={styles.bottomLineText}>{currentBottomLine}</Text>
-        </View>
-
-        {/* Nutrition Facts */}
-        <View style={styles.nutritionSection}>
-          <Text style={styles.sectionTitle}>Quick Facts</Text>
 
           {/* Toggle Switch */}
           <View style={styles.toggleContainer}>
@@ -483,6 +484,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#111827',
+    marginBottom: 0,
+  },
+  quickFactsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 16,
   },
   toggleContainer: {
