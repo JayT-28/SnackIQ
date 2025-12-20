@@ -116,10 +116,10 @@ export default function ResultsScreen({ navigation, route }) {
             <View style={styles.bottomLineHeaderLeft}>
               <AlertCircle color="#a16207" size={20} />
               <Text style={styles.bottomLineTitle}>The Bottom Line</Text>
-              {/* Rating Badge */}
-              <View style={[styles.ratingBadge, { backgroundColor: getRatingBgColor(currentRating) }]}>
-                <Text style={styles.ratingText}>{getRatingText(currentRating)}</Text>
-              </View>
+            </View>
+            {/* Rating Badge */}
+            <View style={[styles.ratingBadge, { backgroundColor: getRatingBgColor(currentRating) }]}>
+              <Text style={styles.ratingText}>{getRatingText(currentRating)}</Text>
             </View>
           </View>
 
