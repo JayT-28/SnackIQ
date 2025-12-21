@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   StyleSheet,
   Platform,
@@ -15,7 +16,9 @@ export default function BarcodeScannerView({
   onToggleToSearch,
   scanning,
   onStartScan,
-  onCloseScan
+  onCloseScan,
+  appStoreBadge,
+  onAppStorePress
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const isProcessing = useRef(false);
@@ -122,6 +125,19 @@ export default function BarcodeScannerView({
           <Text style={styles.webNoticeText}>
             📱 Barcode scanning available on mobile app
           </Text>
+          {appStoreBadge && onAppStorePress && (
+            <TouchableOpacity
+              style={styles.appStoreButtonInline}
+              onPress={onAppStorePress}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={appStoreBadge}
+                style={styles.appStoreBadgeInline}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.toggleButton}
             onPress={onToggleToSearch}

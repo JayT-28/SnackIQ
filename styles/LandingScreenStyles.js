@@ -416,6 +416,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  appStoreButtonInline: {
+    marginTop: 16,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  appStoreBadgeInline: {
+    width: 135,
+    height: 40,
+  },
   quizButton: {
     backgroundColor: '#f59e0b',
     paddingVertical: 12,

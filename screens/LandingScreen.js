@@ -11,6 +11,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { History } from 'lucide-react-native';
@@ -20,6 +21,7 @@ import BarcodeScannerView from './components/BarcodeScannerView';
 import SearchByNameView from './components/SearchByNameView';
 import styles from '../styles/LandingScreenStyles';
 import logo from './SnackIQ.png';
+import appStoreBadge from '../assets/app-store-badge.svg';
 
 export default function LandingScreen({ navigation, route }) {
   const [scanning, setScanning] = useState(false);
@@ -143,6 +145,11 @@ export default function LandingScreen({ navigation, route }) {
   const HISTORY_KEY = '@snackiq_history';
   const MAX_HISTORY = 10;
 
+  // Open App Store
+  const openAppStore = () => {
+    Linking.openURL('https://apps.apple.com/app/snackiq/id6756285662');
+  };
+
   // Add this function in your component
   const saveToHistory = async (productData) => {
     try {
@@ -200,6 +207,8 @@ export default function LandingScreen({ navigation, route }) {
           onStartScan={() => setScanning(true)}
           onCloseScan={() => setScanning(false)}
           onToggleToSearch={() => setShowManualInput(true)}
+          appStoreBadge={appStoreBadge}
+          onAppStorePress={openAppStore}
         />
       </>
     );
@@ -219,7 +228,7 @@ export default function LandingScreen({ navigation, route }) {
 
           {/* Header */}
           <View style={styles.header}>
-            <Image 
+            <Image
               source={logo }
               style={styles.logo}
               resizeMode="contain"
@@ -237,7 +246,7 @@ export default function LandingScreen({ navigation, route }) {
             >
               <History color="#22c55e" size={24} />
             </TouchableOpacity>
-            
+
           </View>
 
           {/* Main Content - Toggle between Scan and Search */}
@@ -248,6 +257,8 @@ export default function LandingScreen({ navigation, route }) {
               onStartScan={() => setScanning(true)}
               onCloseScan={() => setScanning(false)}
               onToggleToSearch={() => setShowManualInput(true)}
+              appStoreBadge={appStoreBadge}
+              onAppStorePress={openAppStore}
             />
           ) : (
             <SearchByNameView
