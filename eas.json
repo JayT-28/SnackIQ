@@ -19,6 +19,10 @@
     "production": {
       "ios": {
         "companyName": "FOOD4LIFE LLC"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal"
       }
     }
   }
